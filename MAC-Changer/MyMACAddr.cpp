@@ -28,10 +28,6 @@ MyMACAddr::MyMACAddr()
 	srand((unsigned)time(0));
 }
 
-MyMACAddr::~MyMACAddr()
-{
-}
-
 //-----------------------------------------------
 // Generate Random MAC Addresses
 //-----------------------------------------------
@@ -177,97 +173,72 @@ unordered_map<string, string> MyMACAddr::getAdapters()
 //-----------------------------------------------
 void MyMACAddr::AssingRndMAC()
 {
-	//-------- Copy Network interfaces to Vector
-	vector <string> list;
 	unordered_map<string, string> AdapterDetails = getAdapters();
-	for (auto &itm : AdapterDetails)
+
+	for (const auto& itm : AdapterDetails)
 	{
-		list.push_back(itm.first);
-	}
+		cout << "----------------------------------------------" << endl;
+		cout << "[-]Selected Adapter is: " << itm.first << endl;
+		cout << "[+]Old MAC: " << itm.second << endl;
 
-	cout << "\n[+]List of Available Adapters: " << endl;
-	int range = 0;
-	for (auto itm = list.begin(); itm != list.end(); itm++)
-	{
-		cout << '\t' << range + 1 << ")" << *itm << endl;
-		range++;
-	}
+		string temp = GenRandMAC();
+		string newMAC = temp;
+		temp.erase(std::remove(temp.begin(), temp.end(), '-'), temp.end());
 
-	cout << "[*]Selection: ";
-	//-------- Input validation
-	int selection = 0;
-	cin >> selection;
-	if ( cin.fail() || (selection < 1) || (selection > range) )
-	{
-		cin.clear();
-		cin.ignore(numeric_limits<streamsize>::max(), '\n');
-		cerr << "[!]Invalid Selection Input!" << endl;
-		return;
-	}
-	
-	cout << "----------------------------------------------" << endl;
-	cout << "[-]Selected Adapter is: " << list.at(selection - 1) << endl;
-	cout << "[+]Old MAC: " << AdapterDetails.at(list.at(selection - 1)) << endl;
+		wstring wstr_newMAC(temp.begin(), temp.end());
+		const wchar_t* newMACAddr = wstr_newMAC.c_str();
 
-	//-------- Converting to Wide characters
-	wstring wstr(list.at(selection - 1).begin(), list.at(selection - 1).end());
-	const wchar_t *wAdapterName = wstr.c_str();
+		//-------- Converting to Wide characters
+		wstring wstr(itm.first.begin(), itm.first.end());
+		const wchar_t* wAdapterName = wstr.c_str();
 
-	//-------- Registry Key for Network Interfaces
-	bool bRet = false;
-	HKEY hKey = NULL;
-	if (RegOpenKeyEx(HKEY_LOCAL_MACHINE,
-		_T("SYSTEM\\CurrentControlSet\\Control\\Class\\{4D36E972-E325-11CE-BFC1-08002bE10318}"),
-		0, KEY_ALL_ACCESS, &hKey) == ERROR_SUCCESS)
-	{
-
-		DWORD dwIndex = 0;
-		TCHAR Name[1024];
-		DWORD cName = 1024;
-		while (RegEnumKeyEx(hKey, dwIndex, Name, &cName,
-			NULL, NULL, NULL, NULL) == ERROR_SUCCESS)
+		//-------- Registry Key for Network Interfaces
+		bool bRet = false;
+		HKEY hKey = NULL;
+		if (RegOpenKeyEx(HKEY_LOCAL_MACHINE,
+			_T("SYSTEM\\CurrentControlSet\\Control\\Class\\{4D36E972-E325-11CE-BFC1-08002bE10318}"),
+			0, KEY_ALL_ACCESS, &hKey) == ERROR_SUCCESS)
 		{
-			HKEY hSubKey = NULL;
-			if (RegOpenKeyEx(hKey, Name, 0, KEY_ALL_ACCESS, &hSubKey) == ERROR_SUCCESS)
+			DWORD dwIndex = 0;
+			TCHAR Name[1024];
+			DWORD cName = 1024;
+			while (RegEnumKeyEx(hKey, dwIndex, Name, &cName,
+				NULL, NULL, NULL, NULL) == ERROR_SUCCESS)
 			{
-				BYTE Data[1204];
-				DWORD cbData = 1024;
-				if (RegQueryValueEx(hSubKey, _T("DriverDesc"), NULL, NULL, Data, &cbData) == ERROR_SUCCESS)
+				HKEY hSubKey = NULL;
+				if (RegOpenKeyEx(hKey, Name, 0, KEY_ALL_ACCESS, &hSubKey) == ERROR_SUCCESS)
 				{
-
-					if (_tcscmp((TCHAR*)Data, wAdapterName) == 0)
+					BYTE Data[1204];
+					DWORD cbData = 1024;
+					if (RegQueryValueEx(hSubKey, _T("DriverDesc"), NULL, NULL, Data, &cbData) == ERROR_SUCCESS)
 					{
-						string temp = GenRandMAC();
-						string newMAC = temp;
-						temp.erase(std::remove(temp.begin(), temp.end(), '-'), temp.end());
-						
-						wstring wstr_newMAC(temp.begin(), temp.end());
-						const wchar_t *newMACAddr = wstr_newMAC.c_str();
-
-						//--------Add new MAC to Registry Subkey and disable and re-enable the interface
-						// to effect changes
-						if (RegSetValueEx(hSubKey, _T("NetworkAddress"), 0, REG_SZ, 
-							(const BYTE*)newMACAddr, sizeof(TCHAR) * ((DWORD)_tcslen(newMACAddr) + 1)) == ERROR_SUCCESS)
+						if (_tcscmp((TCHAR*)Data, wAdapterName) == 0)
 						{
-							cout << "[+]New Random MAC: " << newMAC << endl;
-							DisableEnableConnections(false, wAdapterName);
-							DisableEnableConnections(true, wAdapterName);
+							//--------Add new MAC to Registry Subkey and disable and re-enable the interface
+							// to effect changes
+							if (RegSetValueEx(hSubKey, _T("NetworkAddress"), 0, REG_SZ,
+								(const BYTE*)newMACAddr, sizeof(TCHAR) * ((DWORD)_tcslen(newMACAddr) + 1)) == ERROR_SUCCESS)
+							{
+								cout << "[+]New Random MAC: " << newMAC << endl;
+								DisableEnableConnections(false, wAdapterName);
+								DisableEnableConnections(true, wAdapterName);
+							}
 						}
 					}
+					RegCloseKey(hSubKey);
 				}
-				RegCloseKey(hSubKey);
+				cName = 1024;
+				dwIndex++;
 			}
-			cName = 1024;
-			dwIndex++;
+			RegCloseKey(hKey);
 		}
-		RegCloseKey(hKey);
+		else
+		{
+			cerr << "[!]Cannot Access Registry - Maybe you don't have Administrator permission." << endl;
+			return;
+		}
+		cout << "----------------------------------------------" << endl;
 	}
-	else
-	{
-		cerr << "[!]Cannot Access Registry - Maybe you don't have Administer permission." << endl;
-		return;
-	}
-	cout << "----------------------------------------------" << endl;
 
 }
 
