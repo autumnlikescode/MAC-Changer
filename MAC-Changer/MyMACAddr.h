@@ -38,11 +38,14 @@
 #pragma comment(lib, "IPHLPAPI.lib")
 using namespace std;
 
+
+
 class MyMACAddr
 {
 public:
 	MyMACAddr();
 	~MyMACAddr();
+
 
 	string GenRandMAC();
 	void showAdapterList();
